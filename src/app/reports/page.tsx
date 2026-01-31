@@ -208,7 +208,7 @@ export default function ReportsPage() {
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "8px",
                   }}
-                  formatter={(value: number) => [value.toLocaleString(), "Impressions"]}
+                  formatter={(value) => [typeof value === 'number' ? value.toLocaleString() : '0', "Impressions"]}
                 />
                 <Bar dataKey="impressions" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
               </BarChart>
@@ -280,7 +280,7 @@ export default function ReportsPage() {
                   border: "1px solid hsl(var(--border))",
                   borderRadius: "8px",
                 }}
-                formatter={(value: number) => [`${value}%`, "CTR"]}
+                formatter={(value) => [`${typeof value === 'number' ? value : 0}%`, "CTR"]}
               />
               <Line
                 type="monotone"
