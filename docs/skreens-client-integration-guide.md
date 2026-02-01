@@ -84,21 +84,67 @@ console.log(serverInfo);
 
 ---
 
-### Step 2: Request an L-Bar Ad
+### Step 2: Resolve Device Identity
 
-When a triggering event occurs (touchdown, halftime, etc.), request an ad from the MCP server.
+Before requesting ads, resolve the device to a household for targeted delivery.
 
 ```javascript
 const API_KEY = 'sk_live_your_api_key_here'; // Provided by HyperMindZ
+const DEVICE_ID = 'skreens-venue-42-screen-1'; // Your unique device identifier
+let householdId = null; // Cache this for subsequent requests
 
-async function requestLBarAd(eventType, options = {}) {
+async function resolveIdentity(deviceId, ip) {
   const request = {
     jsonrpc: "2.0",
-    method: "get_lbar_ad",
+    method: "resolve_identity",
     params: {
-      event_type: eventType,           // "TOUCHDOWN", "HALFTIME", etc.
-      device_id: "skreens-venue-42-screen-1",
-      venue_id: "venue-42",
+      device_id: deviceId,   // Required: Your Skreens device ID
+      ip: ip,                // Optional: Device IP for better matching
+    },
+    id: crypto.randomUUID(),
+  };
+
+  const response = await fetch('https://<mcp-server>/api/mcp', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`,
+    },
+    body: JSON.stringify(request),
+  });
+
+  const data = await response.json();
+  if (data.result?.success) {
+    householdId = data.result.household_id;
+    console.log('Resolved to household:', householdId);
+    console.log('Segments:', data.result.profile?.segments);
+  }
+  return data.result;
+}
+
+// Call on startup
+await resolveIdentity(DEVICE_ID, '192.168.1.100');
+```
+
+---
+
+### Step 3: Request a Contextual Ad
+
+When a triggering event occurs (touchdown, halftime, etc.), request a targeted ad.
+
+```javascript
+async function requestContextualAd(eventType, options = {}) {
+  if (!householdId) {
+    console.error('No household_id - call resolveIdentity first');
+    return null;
+  }
+
+  const request = {
+    jsonrpc: "2.0",
+    method: "get_contextual_ad",
+    params: {
+      event_type: eventType,           // Required: "TOUCHDOWN", "HALFTIME", etc.
+      household_id: householdId,       // Required: From resolve_identity
       orientation: options.orientation, // Optional: "top-right", "left-bottom"
       asset_type: options.assetType,   // Optional: "image" or "video"
     },
@@ -118,19 +164,31 @@ async function requestLBarAd(eventType, options = {}) {
   return data.result;
 }
 
-// Example: Request any ad for a touchdown event
-const adResponse = await requestLBarAd("TOUCHDOWN");
+// Example: Request targeted ad for a touchdown event
+const adResponse = await requestContextualAd("TOUCHDOWN");
 
 // Example: Request specifically a video ad with left-bottom orientation
-const videoAd = await requestLBarAd("HALFTIME", {
+const videoAd = await requestContextualAd("HALFTIME", {
   orientation: "left-bottom",
   assetType: "video"
 });
 ```
 
+**Valid Event Types:**
+
+| Category | Events |
+|----------|--------|
+| Football | `TOUCHDOWN`, `FIELD_GOAL`, `SAFETY`, `TWO_POINT_CONVERSION`, `INTERCEPTION`, `FUMBLE_RECOVERY` |
+| Basketball | `THREE_POINTER`, `SLAM_DUNK`, `BUZZER_BEATER`, `FREE_THROW` |
+| Hockey | `GOAL`, `POWER_PLAY_GOAL`, `PENALTY_SHOT` |
+| Baseball | `HOME_RUN`, `GRAND_SLAM`, `STRIKEOUT`, `DOUBLE_PLAY` |
+| Soccer | `SOCCER_GOAL`, `PENALTY_KICK`, `RED_CARD` |
+| Generic | `HALFTIME`, `TIMEOUT`, `GAME_START`, `GAME_END`, `QUARTER_END`, `PERIOD_END`, `REPLAY`, `CHALLENGE`, `COMMERCIAL_BREAK`, `GENERIC` |
+```
+
 ---
 
-### Step 3: Parse the Ad Response
+### Step 4: Parse the Ad Response
 
 The MCP server returns a complete ad specification:
 
@@ -182,7 +240,7 @@ const adResponse = {
 
 ---
 
-### Step 4: Render the L-Bar Overlay
+### Step 5: Render the L-Bar Overlay
 
 Based on the `orientation`, position the L-Bar and resize the live content.
 
@@ -283,7 +341,7 @@ function calculateLBarLayout(orientation, dimensions, screenWidth, screenHeight)
 
 ---
 
-### Step 5: Handle Video L-Bars
+### Step 6: Handle Video L-Bars
 
 For video L-Bars, load and play the video within the L-Bar region.
 
@@ -316,7 +374,7 @@ async function playVideoLBar(ad) {
 
 ---
 
-### Step 6: Track Impressions & Engagement
+### Step 7: Track Impressions & Engagement
 
 Fire tracking pixels at appropriate moments.
 
@@ -617,35 +675,50 @@ async function requestAdWithRetry(eventType, maxRetries = 3) {
 │   Client    │          │  MCP Server │          │   Server    │
 └──────┬──────┘          └──────┬──────┘          └──────┬──────┘
        │                        │                        │
+       │ ═══ APP STARTUP ══════ │                        │
+       │                        │                        │
        │ 1. GET /api/mcp        │                        │
        │ (health check)         │                        │
        │───────────────────────>│                        │
        │                        │                        │
-       │ 200 OK (server info)   │                        │
+       │ 200 OK (server info,   │                        │
+       │ valid_event_types)     │                        │
        │<───────────────────────│                        │
+       │                        │                        │
+       │ 2. POST /api/mcp       │                        │
+       │ {method: resolve_identity}                      │
+       │ {device_id, ip}        │                        │
+       │───────────────────────>│                        │
+       │                        │                        │
+       │ household_id, segments │                        │
+       │<───────────────────────│                        │
+       │                        │                        │
+       │ [Cache household_id]   │                        │
        │                        │                        │
        │ ═══ TOUCHDOWN EVENT ═══│                        │
        │                        │                        │
-       │ 2. POST /api/mcp       │                        │
-       │ {method: get_lbar_ad}  │                        │
+       │ 3. POST /api/mcp       │                        │
+       │ {method: get_contextual_ad}                     │
+       │ {event_type, household_id}                      │
        │───────────────────────>│                        │
        │                        │                        │
-       │ 200 OK (ad response)   │                        │
+       │ 200 OK (targeted ad,   │                        │
+       │ targeting score)       │                        │
        │<───────────────────────│                        │
        │                        │                        │
-       │ 3. Squeeze live content│                        │
-       │ 4. Render L-Bar overlay│                        │
-       │ 5. Play video/image    │                        │
+       │ 4. Squeeze live content│                        │
+       │ 5. Render L-Bar overlay│                        │
+       │ 6. Play video/image    │                        │
        │                        │                        │
-       │ 6. Fire impression     │                        │
+       │ 7. Fire impression     │                        │
        │────────────────────────┼───────────────────────>│
        │                        │                        │
        │ [Wait duration_ms]     │                        │
        │                        │                        │
-       │ 7. Remove overlay      │                        │
-       │ 8. Restore content     │                        │
+       │ 8. Remove overlay      │                        │
+       │ 9. Restore content     │                        │
        │                        │                        │
-       │ 9. Fire completion     │                        │
+       │ 10. Fire completion    │                        │
        │────────────────────────┼───────────────────────>│
        │                        │                        │
 ```
@@ -654,13 +727,25 @@ async function requestAdWithRetry(eventType, maxRetries = 3) {
 
 ## Summary
 
-1. **Initialize**: Check MCP server health on app start
-2. **Listen**: Monitor for sports events (touchdown, halftime, etc.)
-3. **Request**: Call `get_lbar_ad` with event type and optional filters
-4. **Parse**: Extract orientation, dimensions, assets, and tracking URLs
-5. **Render**: Squeeze live content, overlay L-Bar (image or video)
-6. **Track**: Fire impression pixel on display
-7. **Timeout**: Remove overlay after `duration_ms`
-8. **Restore**: Return live content to full screen
+1. **Initialize**: Check MCP server health on app start (GET `/api/mcp`)
+2. **Authenticate**: Use API key via `Authorization: Bearer <key>` header
+3. **Resolve Identity**: Call `resolve_identity` with device_id to get household_id
+4. **Cache Household**: Store household_id for subsequent ad requests
+5. **Listen**: Monitor for sports events (touchdown, halftime, etc.)
+6. **Request**: Call `get_contextual_ad` with event_type and household_id
+7. **Parse**: Extract orientation, dimensions, assets, and tracking URLs
+8. **Render**: Squeeze live content, overlay L-Bar (image or video)
+9. **Track**: Fire impression pixel on display
+10. **Timeout**: Remove overlay after `duration_ms`
+11. **Restore**: Return live content to full screen
 
-The MCP server handles ad selection, rotation, and provides complete rendering specifications. The Skreens client is responsible for the actual display and content management.
+The MCP server handles:
+- Identity resolution (device → household → segments)
+- Contextual ad targeting based on event type and household segments
+- Ad scoring and ranking for best match
+
+The Skreens client is responsible for:
+- Caching the household_id after initial resolution
+- Triggering ad requests on sports events
+- Rendering L-Bar overlays and content squeezing
+- Tracking impressions and engagement

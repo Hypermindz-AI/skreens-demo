@@ -7,7 +7,13 @@ import {
   LBAR_CONCEPTS,
   type LBarOrientation,
   type AssetType,
+  type LBarAd,
 } from "@/lib/mcp/lbar-concepts";
+import {
+  resolveIdentity,
+  getHouseholdProfile,
+  getAvailableSegments,
+} from "@/lib/mcp/identity-resolution";
 
 /**
  * HyperMindZ MCP Server API
@@ -15,13 +21,197 @@ import {
  * JSON-RPC 2.0 endpoint for Skreens integration
  *
  * Methods:
- * - get_lbar_ad: Get an L-Bar ad for display during events
+ * - resolve_identity: Resolve device/IP to household identity
+ * - get_contextual_ad: Get a contextual L-Bar ad based on event and household
+ * - get_lbar_ad: Get an L-Bar ad for display during events (legacy)
  * - list_lbar_ads: List all available L-Bar ad concepts
  *
  * Authentication:
  * - API Key via Authorization header: "Bearer sk_live_xxxx"
  * - Or via X-API-Key header
  */
+
+/**
+ * Valid event types for contextual ad triggering
+ */
+export const VALID_EVENT_TYPES = [
+  // Football (NFL/College)
+  "TOUCHDOWN",
+  "FIELD_GOAL",
+  "SAFETY",
+  "TWO_POINT_CONVERSION",
+  "INTERCEPTION",
+  "FUMBLE_RECOVERY",
+
+  // Basketball (NBA/College)
+  "THREE_POINTER",
+  "SLAM_DUNK",
+  "BUZZER_BEATER",
+  "FREE_THROW",
+
+  // Hockey (NHL)
+  "GOAL",
+  "POWER_PLAY_GOAL",
+  "PENALTY_SHOT",
+
+  // Baseball (MLB)
+  "HOME_RUN",
+  "GRAND_SLAM",
+  "STRIKEOUT",
+  "DOUBLE_PLAY",
+
+  // Soccer (MLS/International)
+  "SOCCER_GOAL",
+  "PENALTY_KICK",
+  "RED_CARD",
+
+  // Generic events (all sports)
+  "HALFTIME",
+  "TIMEOUT",
+  "GAME_START",
+  "GAME_END",
+  "QUARTER_END",
+  "PERIOD_END",
+  "REPLAY",
+  "CHALLENGE",
+  "COMMERCIAL_BREAK",
+
+  // Fallback
+  "GENERIC",
+] as const;
+
+export type EventType = (typeof VALID_EVENT_TYPES)[number];
+
+/**
+ * Ad-to-segment affinity mapping for contextual targeting
+ * Higher scores = better match for that segment
+ */
+const AD_SEGMENT_AFFINITY: Record<string, Record<string, number>> = {
+  "ubereats-delivery": {
+    "delivery-users": 1.0,
+    "young-professionals": 0.8,
+    "sports-enthusiasts": 0.6,
+  },
+  "lavazza-tabli": {
+    "coffee-lovers": 1.0,
+    "luxury-shoppers": 0.7,
+    "fine-dining": 0.6,
+  },
+  "ford-f150-touchdown": {
+    "premium-auto-intenders": 1.0,
+    "sports-enthusiasts": 0.9,
+    "home-improvement": 0.5,
+  },
+  "budweiser-celebration": {
+    "beer-drinkers": 1.0,
+    "sports-enthusiasts": 0.9,
+    "value-seekers": 0.6,
+  },
+  "draftkings-live-odds": {
+    "sports-bettors": 1.0,
+    "sports-enthusiasts": 0.8,
+    "young-professionals": 0.5,
+  },
+  "pepsi-zero-refresh": {
+    "health-conscious": 0.8,
+    "sports-enthusiasts": 0.7,
+    "value-seekers": 0.6,
+  },
+  "toyota-halftime": {
+    "premium-auto-intenders": 0.9,
+    "electric-vehicle-intenders": 0.7,
+    "luxury-shoppers": 0.6,
+  },
+};
+
+/**
+ * Event-to-ad affinity mapping
+ * Which ads perform best during specific events
+ */
+const EVENT_AD_AFFINITY: Record<string, string[]> = {
+  "TOUCHDOWN": ["ford-f150-touchdown", "budweiser-celebration", "draftkings-live-odds"],
+  "FIELD_GOAL": ["draftkings-live-odds", "pepsi-zero-refresh"],
+  "HALFTIME": ["toyota-halftime", "ubereats-delivery", "lavazza-tabli"],
+  "THREE_POINTER": ["draftkings-live-odds", "pepsi-zero-refresh"],
+  "GOAL": ["budweiser-celebration", "draftkings-live-odds"],
+  "HOME_RUN": ["budweiser-celebration", "ford-f150-touchdown"],
+  "TIMEOUT": ["ubereats-delivery", "pepsi-zero-refresh"],
+  "COMMERCIAL_BREAK": ["toyota-halftime", "ford-f150-touchdown", "lavazza-tabli"],
+  "GENERIC": ["ubereats-delivery", "pepsi-zero-refresh", "draftkings-live-odds"],
+};
+
+interface ScoredAd {
+  ad: LBarAd;
+  totalScore: number;
+  eventScore: number;
+  segmentScore: number;
+  matchedSegments: string[];
+}
+
+/**
+ * Score and rank ads based on event context and household segments
+ */
+function scoreAdsForContext(
+  eventType: EventType,
+  householdSegments: string[],
+  preferredOrientation?: LBarOrientation,
+  preferredAssetType?: AssetType
+): ScoredAd[] {
+  const scoredAds: ScoredAd[] = [];
+
+  for (const ad of LBAR_CONCEPTS) {
+    // Filter by orientation if specified
+    if (preferredOrientation && ad.orientation !== preferredOrientation) {
+      continue;
+    }
+
+    // Filter by asset type if specified
+    if (preferredAssetType && ad.assets.type !== preferredAssetType) {
+      continue;
+    }
+
+    // Calculate event relevance score (0-1)
+    let eventScore = 0;
+    const eventAds = EVENT_AD_AFFINITY[eventType] || EVENT_AD_AFFINITY["GENERIC"];
+    const eventIndex = eventAds.indexOf(ad.id);
+    if (eventIndex !== -1) {
+      eventScore = 1 - eventIndex * 0.2; // First ad gets 1.0, second 0.8, etc.
+    }
+
+    // Calculate segment relevance score (0-1)
+    let segmentScore = 0;
+    const matchedSegments: string[] = [];
+    const adAffinities = AD_SEGMENT_AFFINITY[ad.id] || {};
+
+    for (const segment of householdSegments) {
+      if (adAffinities[segment]) {
+        segmentScore += adAffinities[segment];
+        matchedSegments.push(segment);
+      }
+    }
+
+    // Normalize segment score
+    if (matchedSegments.length > 0) {
+      segmentScore = segmentScore / matchedSegments.length;
+    }
+
+    // Combined score: 60% event relevance, 40% segment relevance
+    const totalScore = eventScore * 0.6 + segmentScore * 0.4;
+
+    scoredAds.push({
+      ad,
+      totalScore,
+      eventScore,
+      segmentScore,
+      matchedSegments,
+    });
+  }
+
+  // Sort by total score descending
+  scoredAds.sort((a, b) => b.totalScore - a.totalScore);
+
+  return scoredAds;
+}
 
 // API Key validation
 const VALID_API_KEYS = new Set([
@@ -75,12 +265,19 @@ function unauthorizedResponse(message: string, id?: string | number | null) {
 export async function GET() {
   return NextResponse.json({
     name: "hypermindz-lbar-mcp",
-    version: "1.0.0",
-    description: "HyperMindZ MCP Server for Skreens L-Bar Ads",
-    methods: ["get_lbar_ad", "list_lbar_ads"],
+    version: "2.0.0",
+    description: "HyperMindZ MCP Server for Skreens L-Bar Ads with Identity Resolution",
+    methods: [
+      "resolve_identity",
+      "get_contextual_ad",
+      "get_lbar_ad",
+      "list_lbar_ads",
+    ],
     protocol: "JSON-RPC 2.0",
+    valid_event_types: VALID_EVENT_TYPES,
     supported_orientations: ["top-right", "left-bottom", "top-left", "right-bottom"],
     supported_asset_types: ["image", "video"],
+    available_segments: getAvailableSegments(),
     total_ads: LBAR_CONCEPTS.length,
   });
 }
@@ -127,6 +324,164 @@ export async function POST(request: NextRequest) {
     let result;
 
     switch (method) {
+      /**
+       * resolve_identity - Resolve device/IP to household identity
+       *
+       * Parameters:
+       * - device_id (required): Skreens device identifier
+       * - ip (optional): IP address for probabilistic matching
+       *
+       * Returns household profile with segments for targeting
+       */
+      case "resolve_identity": {
+        const { device_id, ip } = params || {};
+
+        if (!device_id) {
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              error: {
+                code: -32602,
+                message: "Invalid params: device_id is required",
+              },
+              id,
+            },
+            { status: 400 }
+          );
+        }
+
+        const identityResult = resolveIdentity(device_id, ip);
+
+        result = {
+          success: identityResult.success,
+          household_id: identityResult.household_id,
+          profile: identityResult.profile,
+          resolution: {
+            method: identityResult.resolution_method,
+            confidence: identityResult.match_confidence,
+            data_sources: identityResult.data_sources,
+          },
+          request_context: {
+            device_id,
+            ip: ip || null,
+            timestamp: new Date().toISOString(),
+          },
+        };
+        break;
+      }
+
+      /**
+       * get_contextual_ad - Get targeted L-Bar ad based on event and household
+       *
+       * Parameters:
+       * - event_type (required): Event that triggered the ad request
+       * - household_id (required): Household ID from resolve_identity
+       * - orientation (optional): Preferred L-Bar orientation
+       * - asset_type (optional): Preferred asset type (image/video)
+       *
+       * Returns best-matched ad based on household segments and event context
+       */
+      case "get_contextual_ad": {
+        const { event_type, household_id, orientation, asset_type } = params || {};
+
+        // Validate required parameters
+        if (!event_type) {
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              error: {
+                code: -32602,
+                message: `Invalid params: event_type is required. Valid values: ${VALID_EVENT_TYPES.join(", ")}`,
+              },
+              id,
+            },
+            { status: 400 }
+          );
+        }
+
+        if (!household_id) {
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              error: {
+                code: -32602,
+                message: "Invalid params: household_id is required. Call resolve_identity first.",
+              },
+              id,
+            },
+            { status: 400 }
+          );
+        }
+
+        // Validate event_type
+        const normalizedEventType = event_type.toUpperCase() as EventType;
+        if (!VALID_EVENT_TYPES.includes(normalizedEventType)) {
+          return NextResponse.json(
+            {
+              jsonrpc: "2.0",
+              error: {
+                code: -32602,
+                message: `Invalid event_type: "${event_type}". Valid values: ${VALID_EVENT_TYPES.join(", ")}`,
+              },
+              id,
+            },
+            { status: 400 }
+          );
+        }
+
+        // Get household profile
+        const household = getHouseholdProfile(household_id);
+
+        // Score and rank ads based on household segments and event context
+        const scoredAds = scoreAdsForContext(
+          normalizedEventType,
+          household?.segments || [],
+          orientation as LBarOrientation | undefined,
+          asset_type as AssetType | undefined
+        );
+
+        if (scoredAds.length === 0) {
+          // Fallback to random ad
+          const fallbackAd = getRandomLBarAd();
+          result = {
+            success: true,
+            ad: fallbackAd,
+            targeting: {
+              method: "fallback",
+              score: 0,
+              matched_segments: [],
+              event_relevance: 0,
+            },
+            request_context: {
+              event_type: normalizedEventType,
+              household_id,
+              household_found: !!household,
+              timestamp: new Date().toISOString(),
+            },
+          };
+        } else {
+          const bestMatch = scoredAds[0];
+          result = {
+            success: true,
+            ad: bestMatch.ad,
+            targeting: {
+              method: "contextual",
+              score: bestMatch.totalScore,
+              matched_segments: bestMatch.matchedSegments,
+              event_relevance: bestMatch.eventScore,
+              segment_relevance: bestMatch.segmentScore,
+            },
+            request_context: {
+              event_type: normalizedEventType,
+              household_id,
+              household_segments: household?.segments || [],
+              timestamp: new Date().toISOString(),
+            },
+          };
+        }
+        break;
+      }
+
       case "get_lbar_ad": {
         const {
           event_type,

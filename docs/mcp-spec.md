@@ -1,8 +1,8 @@
 # HyperMindZ MCP Server Specification
 
-**Version**: 1.0.0
-**Last Updated**: January 2025
-**Status**: Draft
+**Version**: 2.0.0
+**Last Updated**: February 2025
+**Status**: Ready for Integration
 
 ---
 
@@ -28,8 +28,11 @@ The HyperMindZ MCP (Model Context Protocol) Server provides contextual advertisi
 
 | Environment | URL |
 |-------------|-----|
-| Production | `https://<production-domain>/mcp` |
-| Sandbox | `https://<sandbox-domain>/mcp` |
+| Production | `https://skreens-demo.vercel.app/api/mcp` |
+| Development | `http://localhost:3002/api/mcp` |
+
+**Endpoint**: `POST /api/mcp` (JSON-RPC 2.0)
+**Health Check**: `GET /api/mcp` (returns server info and supported methods)
 
 ### Key Capabilities
 
@@ -523,7 +526,7 @@ Multiple methods can be called in a single request:
 
 ### 1. resolve_identity
 
-Resolves a device identifier to a household profile with audience segments.
+Resolves a device identifier to a household profile with audience segments for targeted ad delivery.
 
 **Required Scope:** `mcp:read`
 
@@ -533,11 +536,8 @@ Resolves a device identifier to a household profile with audience segments.
   "jsonrpc": "2.0",
   "method": "resolve_identity",
   "params": {
-    "device_id": "skreens-venue-342-screen-7",
-    "ip_address": "192.168.1.45",
-    "user_agent": "Skreens/3.2.1",
-    "venue_id": "venue-342",
-    "timestamp": "2025-01-23T14:30:00.000Z"
+    "device_id": "skreens-venue-42-screen-1",
+    "ip": "192.168.1.100"
   },
   "id": "req-001"
 }
@@ -545,36 +545,50 @@ Resolves a device identifier to a household profile with audience segments.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `device_id` | string | Yes | Unique device identifier |
-| `ip_address` | string | No | Device IP address |
-| `user_agent` | string | No | Client user agent string |
-| `venue_id` | string | No | Venue identifier for location context |
-| `timestamp` | string | No | ISO 8601 timestamp |
+| `device_id` | string | **Yes** | Unique Skreens device identifier (e.g., `skreens-venue-42-screen-1`) |
+| `ip` | string | No | Device IP address for probabilistic matching |
+
+**Which device_id should be used?**
+
+The `device_id` should be the unique identifier assigned to each Skreens display device. Recommended format:
+- `skreens-{venue_id}-{screen_number}` (e.g., `skreens-venue-42-screen-1`)
+- `skreens-{location}-{area}` (e.g., `skreens-airport-lax-gate-12`)
+- `skreens-{venue_type}-{city}-{identifier}` (e.g., `skreens-bar-chicago-main`)
 
 **Response:**
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
-    "household_id": "HH-8847291",
-    "segments": [
-      "sports_fan",
-      "high_hhi",
-      "auto_intender",
-      "qsr_frequent"
-    ],
-    "consent_status": "opted_in",
-    "match_confidence": 0.94,
-    "match_type": "deterministic",
-    "demographics": {
-      "age_range": "25-54",
-      "income_bracket": "100k+",
-      "presence": {
-        "adults": 2,
-        "children": 1
-      }
+    "success": true,
+    "household_id": "hh_001",
+    "profile": {
+      "household_id": "hh_001",
+      "segments": [
+        "sports-enthusiasts",
+        "premium-auto-intenders",
+        "beer-drinkers"
+      ],
+      "demographics": {
+        "income_bracket": "100k-150k",
+        "household_size": 3,
+        "presence_of_children": true,
+        "home_ownership": "owner"
+      },
+      "interests": ["football", "trucks", "grilling", "home-improvement"],
+      "sports_affinities": ["NFL", "Dallas Cowboys", "College Football"],
+      "confidence_score": 0.92
     },
-    "ttl_seconds": 3600
+    "resolution": {
+      "method": "deterministic",
+      "confidence": 0.95,
+      "data_sources": ["device-graph"]
+    },
+    "request_context": {
+      "device_id": "skreens-venue-42-screen-1",
+      "ip": "192.168.1.100",
+      "timestamp": "2025-02-01T05:33:34.121Z"
+    }
   },
   "id": "req-001"
 }
@@ -582,19 +596,26 @@ Resolves a device identifier to a household profile with audience segments.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `household_id` | string | Unique household identifier |
-| `segments` | string[] | Audience segment tags |
-| `consent_status` | enum | `opted_in`, `opted_out`, `unknown` |
-| `match_confidence` | number | 0.0 - 1.0 confidence score |
-| `match_type` | enum | `deterministic`, `probabilistic`, `contextual` |
-| `demographics` | object | Demographic attributes |
-| `ttl_seconds` | number | Cache TTL for this resolution |
+| `success` | boolean | Whether resolution succeeded |
+| `household_id` | string | Unique household identifier to use in `get_contextual_ad` |
+| `profile.segments` | string[] | Audience segment tags for targeting |
+| `profile.demographics` | object | Demographic attributes |
+| `profile.interests` | string[] | Interest categories |
+| `profile.sports_affinities` | string[] | Sports team/league affinities |
+| `resolution.method` | enum | `deterministic`, `probabilistic`, or `fallback` |
+| `resolution.confidence` | number | 0.0 - 1.0 match confidence |
+| `resolution.data_sources` | string[] | Which data providers contributed |
+
+**Resolution Priority:**
+1. **Deterministic**: Exact device_id match in device graph (confidence: 0.95)
+2. **Probabilistic**: IP-based household inference (confidence: 0.72)
+3. **Fallback**: Consistent assignment for unknown devices (confidence: 0.45)
 
 ---
 
 ### 2. get_contextual_ad
 
-Retrieves a contextual ad creative based on a live event trigger.
+Retrieves a targeted L-Bar ad based on a live event trigger and household profile.
 
 **Required Scope:** `mcp:read`
 
@@ -605,23 +626,9 @@ Retrieves a contextual ad creative based on a live event trigger.
   "method": "get_contextual_ad",
   "params": {
     "event_type": "TOUCHDOWN",
-    "event_data": {
-      "team": "KC",
-      "player": "Mahomes",
-      "quarter": 2,
-      "score_home": 14,
-      "score_away": 7
-    },
-    "content_id": "nfl-kc-sf-2025",
-    "household_id": "HH-8847291",
-    "screen_capabilities": {
-      "lbar_supported": true,
-      "overlay_supported": true,
-      "max_width_percent": 30,
-      "resolution": "1920x1080",
-      "hdr_supported": false
-    },
-    "deal_ids": ["deal-pmp-001", "deal-pmp-002"]
+    "household_id": "hh_001",
+    "orientation": "top-right",
+    "asset_type": "image"
   },
   "id": "req-002"
 }
@@ -629,80 +636,101 @@ Retrieves a contextual ad creative based on a live event trigger.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `event_type` | enum | Yes | Event trigger type (see Event Types) |
-| `event_data` | object | No | Additional event context |
-| `content_id` | string | Yes | Content/program identifier |
-| `household_id` | string | No | From resolve_identity |
-| `screen_capabilities` | object | Yes | Display capabilities |
-| `deal_ids` | string[] | No | PMP deal IDs to consider |
+| `event_type` | enum | **Yes** | Event trigger type (see Event Types below) |
+| `household_id` | string | **Yes** | Household ID from `resolve_identity` response |
+| `orientation` | enum | No | Preferred L-Bar orientation: `top-right`, `left-bottom`, `top-left`, `right-bottom` |
+| `asset_type` | enum | No | Preferred asset type: `image` or `video` |
 
-**Event Types:**
+**Valid Event Types:**
 
-| Event Type | Sport | Description |
-|------------|-------|-------------|
-| `TOUCHDOWN` | NFL | Touchdown scored |
-| `FIELD_GOAL` | NFL | Field goal made |
-| `HALFTIME` | All | Halftime break |
-| `GOAL` | NHL/Soccer | Goal scored |
-| `HOME_RUN` | MLB | Home run hit |
-| `THREE_POINTER` | NBA | Three-point shot made |
-| `TIMEOUT` | All | Timeout called |
-| `GAME_START` | All | Game beginning |
-| `GAME_END` | All | Game conclusion |
-| `HIGHLIGHT` | All | Replay/highlight moment |
+| Category | Event Types |
+|----------|------------|
+| **Football (NFL/College)** | `TOUCHDOWN`, `FIELD_GOAL`, `SAFETY`, `TWO_POINT_CONVERSION`, `INTERCEPTION`, `FUMBLE_RECOVERY` |
+| **Basketball (NBA/College)** | `THREE_POINTER`, `SLAM_DUNK`, `BUZZER_BEATER`, `FREE_THROW` |
+| **Hockey (NHL)** | `GOAL`, `POWER_PLAY_GOAL`, `PENALTY_SHOT` |
+| **Baseball (MLB)** | `HOME_RUN`, `GRAND_SLAM`, `STRIKEOUT`, `DOUBLE_PLAY` |
+| **Soccer (MLS/International)** | `SOCCER_GOAL`, `PENALTY_KICK`, `RED_CARD` |
+| **Generic (All Sports)** | `HALFTIME`, `TIMEOUT`, `GAME_START`, `GAME_END`, `QUARTER_END`, `PERIOD_END`, `REPLAY`, `CHALLENGE`, `COMMERCIAL_BREAK`, `GENERIC` |
 
 **Response:**
 ```json
 {
   "jsonrpc": "2.0",
   "result": {
-    "creative_id": "ford-f150-sports-2025",
-    "advertiser": "Ford Motor Company",
-    "campaign_id": "camp-ford-q1-2025",
-    "deal_id": "deal-pmp-001",
-    "template": "lbar_squeeze_20",
-    "duration_ms": 15000,
-    "priority": 1,
-    "assets": {
-      "headline": "TOUCHDOWN DEAL!",
-      "subheadline": "Celebrate with $5,000 off",
-      "cta": "Scan for Offer",
-      "logo_url": "https://<cdn-domain>/assets/ford-logo.png",
-      "background_url": "https://<cdn-domain>/assets/ford-f150-bg.jpg",
-      "qr_code_url": "https://<cdn-domain>/qr/ford-f150-promo",
-      "qr_destination": "https://ford.com/f150-promo?utm_source=skreens"
-    },
-    "tracking": {
-      "impression_url": "https://<tracking-domain>/imp/abc123",
-      "viewable_url": "https://<tracking-domain>/view/abc123",
-      "click_url": "https://<tracking-domain>/clk/abc123",
-      "qr_scan_url": "https://<tracking-domain>/qr/abc123"
-    },
-    "restrictions": {
-      "frequency_cap": {
-        "max_impressions": 3,
-        "period_hours": 24
+    "success": true,
+    "ad": {
+      "id": "ford-f150-touchdown",
+      "advertiser": "Ford Motor Company",
+      "campaign": "F-150 Game Day",
+      "orientation": "top-right",
+      "dimensions": {
+        "top_bar_height": 10,
+        "right_bar_width": 25
       },
-      "dayparting": {
-        "allowed_hours": [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+      "duration_ms": 15000,
+      "assets": {
+        "type": "image",
+        "image_url": "/ads/ford-f150-lbar.png",
+        "headline": "TOUCHDOWN DEAL!",
+        "subheadline": "Celebrate with $5,000 off F-150",
+        "cta": "Scan for Offer",
+        "logo_url": "/ads/ford-logo.png",
+        "background_color": "#00274D",
+        "text_color": "#FFFFFF",
+        "accent_color": "#F5B400",
+        "qr_code_url": "/ads/qr-ford.png",
+        "qr_destination": "https://ford.com/f150-promo"
+      },
+      "tracking": {
+        "impression_url": "/api/track/impression?ad=ford-f150-touchdown",
+        "click_url": "/api/track/click?ad=ford-f150-touchdown"
+      },
+      "content_area": {
+        "position": "bottom-left",
+        "width_percent": 75,
+        "height_percent": 90
       }
     },
-    "fallback_creative_id": "generic-sports-2025"
+    "targeting": {
+      "method": "contextual",
+      "score": 0.98,
+      "matched_segments": ["sports-enthusiasts", "premium-auto-intenders"],
+      "event_relevance": 1,
+      "segment_relevance": 0.95
+    },
+    "request_context": {
+      "event_type": "TOUCHDOWN",
+      "household_id": "hh_001",
+      "household_segments": ["sports-enthusiasts", "premium-auto-intenders", "beer-drinkers"],
+      "timestamp": "2025-02-01T05:33:42.266Z"
+    }
   },
   "id": "req-002"
 }
 ```
 
-**Template Types:**
+**Response Fields:**
 
-| Template | Description | Duration |
-|----------|-------------|----------|
-| `lbar_squeeze_20` | L-Bar with 20% content squeeze | 15-30s |
-| `lbar_squeeze_30` | L-Bar with 30% content squeeze | 15-30s |
-| `lbar_overlay` | L-Bar overlay (no squeeze) | 10-20s |
-| `full_overlay` | Full-screen overlay | 5-15s |
-| `lower_third` | Lower third banner | 10-20s |
-| `corner_bug` | Corner logo/bug | 5-30s |
+| Field | Type | Description |
+|-------|------|-------------|
+| `ad.id` | string | Unique ad identifier |
+| `ad.orientation` | enum | L-Bar position: `top-right`, `left-bottom`, `top-left`, `right-bottom` |
+| `ad.dimensions` | object | L-Bar size as percentage of screen |
+| `ad.duration_ms` | number | How long to display the ad (milliseconds) |
+| `ad.assets` | object | Creative assets (images, videos, text, colors) |
+| `ad.tracking` | object | URLs for impression and click tracking |
+| `ad.content_area` | object | Where live content should be positioned |
+| `targeting.score` | number | 0.0 - 1.0 targeting relevance score |
+| `targeting.matched_segments` | string[] | Household segments that matched this ad |
+
+**L-Bar Orientations:**
+
+| Orientation | Description | Content Position |
+|-------------|-------------|------------------|
+| `top-right` | Top bar + Right bar | Content bottom-left |
+| `left-bottom` | Left bar + Bottom bar | Content top-right |
+| `top-left` | Top bar + Left bar | Content bottom-right |
+| `right-bottom` | Right bar + Bottom bar | Content top-left |
 
 ---
 
@@ -1085,10 +1113,18 @@ HyperMindZ can send real-time notifications for key events.
 
 ## Changelog
 
+### v2.0.0 (February 2025)
+- **`resolve_identity` implementation**: Device-to-household resolution with segments
+- **`get_contextual_ad` implementation**: Contextual ad selection with 30 event types
+- Added comprehensive event type list for all major sports
+- Added API key authentication (Bearer token + X-API-Key header)
+- Added targeting scoring with segment and event relevance
+- Production endpoint: `https://skreens-demo.vercel.app/api/mcp`
+
 ### v1.0.0 (January 2025)
-- Initial release
-- 5 core methods: `resolve_identity`, `get_contextual_ad`, `get_ad_decision`, `post_ad_events`, `sync_supply_packages`
-- Clerk OAuth 2.1 authentication
+- Initial specification draft
+- 5 core methods defined: `resolve_identity`, `get_contextual_ad`, `get_ad_decision`, `post_ad_events`, `sync_supply_packages`
+- OAuth 2.1 authentication design
 - JSON-RPC 2.0 transport
 
 ---
