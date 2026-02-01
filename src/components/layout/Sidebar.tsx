@@ -13,10 +13,12 @@ import {
   Settings,
   Tv,
   Activity,
+  FlaskConical,
 } from "lucide-react";
 
 const navItems = [
   { href: "/lbar-demo", label: "L-Bar Demo", icon: Tv, highlight: true },
+  { href: "/test-client", label: "MCP Test Client", icon: FlaskConical, highlight: true },
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/deals", label: "Deals", icon: FileText },
   { href: "/inventory", label: "Inventory", icon: Package },
