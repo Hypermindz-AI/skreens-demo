@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="225" viewBox="0 0 400 225">
+  <rect width="400" height="225" fill="#C8102E"/>
+  <rect x="20" y="40" width="150" height="145" fill="#8B0000" rx="10"/>
+  <ellipse cx="95" cy="100" rx="40" ry="50" fill="#D4AF37"/>
+  <ellipse cx="95" cy="100" rx="35" ry="45" fill="#C8102E"/>
+  <text x="95" y="105" font-family="Arial" font-size="12" font-weight="bold" fill="#fff" text-anchor="middle">BUD</text>
+  <text x="280" y="70" font-family="Arial, sans-serif" font-size="32" font-weight="bold" fill="#fff" text-anchor="middle">CHEERS!</text>
+  <text x="280" y="100" font-family="Arial, sans-serif" font-size="14" fill="#FFD700" text-anchor="middle">Celebrate the Win</text>
+  <text x="280" y="130" font-family="Arial, sans-serif" font-size="12" fill="#fff" text-anchor="middle">This Bud's For You</text>
+  <rect x="200" y="160" width="160" height="45" fill="#fff" rx="5"/>
+  <text x="280" y="190" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#C8102E" text-anchor="middle">FIND NEAR YOU</text>
+</svg>

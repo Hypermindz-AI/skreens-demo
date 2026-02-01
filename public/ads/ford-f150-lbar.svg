@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200" viewBox="0 0 400 200">
+  <rect width="400" height="200" fill="#003478"/>
+  <rect x="20" y="20" width="160" height="160" fill="#1a4a8a" rx="10"/>
+  <text x="100" y="90" font-family="Arial, sans-serif" font-size="24" font-weight="bold" fill="#fff" text-anchor="middle">F-150</text>
+  <text x="100" y="120" font-family="Arial, sans-serif" font-size="14" fill="#ccc" text-anchor="middle">Game Day Edition</text>
+  <text x="300" y="80" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#F5B400" text-anchor="middle">$5,000 OFF</text>
+  <text x="300" y="110" font-family="Arial, sans-serif" font-size="14" fill="#fff" text-anchor="middle">Limited Time Offer</text>
+  <rect x="240" y="130" width="120" height="40" fill="#F5B400" rx="5"/>
+  <text x="300" y="157" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#003478" text-anchor="middle">BUILD YOURS</text>
+</svg>
