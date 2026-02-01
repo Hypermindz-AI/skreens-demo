@@ -615,6 +615,46 @@ export default function TestClientPage() {
   );
 }
 
+// Logo Component with fallback
+function AdLogo({
+  logoUrl,
+  advertiser,
+  accentColor,
+  size = "md"
+}: {
+  logoUrl?: string;
+  advertiser: string;
+  accentColor: string;
+  size?: "sm" | "md" | "lg";
+}) {
+  const [imgError, setImgError] = useState(false);
+  const sizeClasses = {
+    sm: "w-10 h-10 text-lg",
+    md: "w-12 h-12 text-xl",
+    lg: "w-16 h-16 text-2xl",
+  };
+
+  if (logoUrl && !imgError) {
+    return (
+      <img
+        src={logoUrl}
+        alt={`${advertiser} logo`}
+        className={`${size === "lg" ? "w-16 h-16" : size === "md" ? "w-12 h-12" : "w-10 h-10"} rounded-lg object-contain bg-white p-1`}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <div
+      className={`${sizeClasses[size]} rounded-lg flex items-center justify-center`}
+      style={{ backgroundColor: accentColor }}
+    >
+      <span className="text-white font-bold">{advertiser.charAt(0)}</span>
+    </div>
+  );
+}
+
 // L-Bar Overlay Component
 function LBarOverlay({
   ad,
@@ -732,14 +772,12 @@ function LBarOverlay({
         <div style={styles.topBar}>
           <div className="flex items-center justify-between w-full max-w-4xl">
             <div className="flex items-center gap-4">
-              <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: assets.accent_color }}
-              >
-                <span className="text-white font-bold text-xl">
-                  {ad.advertiser.charAt(0)}
-                </span>
-              </div>
+              <AdLogo
+                logoUrl={assets.logo_url}
+                advertiser={ad.advertiser}
+                accentColor={assets.accent_color}
+                size="md"
+              />
               <div>
                 <h2 className="text-xl font-bold">{assets.headline}</h2>
                 {assets.subheadline && (
@@ -748,6 +786,14 @@ function LBarOverlay({
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Display ad image in top bar if available */}
+              {assets.type === "image" && assets.image_url && (
+                <img
+                  src={assets.image_url}
+                  alt={ad.campaign}
+                  className="h-full max-h-16 object-contain rounded"
+                />
+              )}
               <Button
                 style={{
                   backgroundColor: assets.accent_color,
@@ -765,19 +811,38 @@ function LBarOverlay({
       {/* Side Bar */}
       {styles.sideBar && (
         <div style={styles.sideBar}>
-          <div className="flex flex-col items-center gap-4 text-center">
-            <div
-              className="w-16 h-16 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: assets.accent_color }}
-            >
-              <span className="text-white font-bold text-2xl">
-                {ad.advertiser.charAt(0)}
-              </span>
-            </div>
+          <div className="flex flex-col items-center gap-3 text-center overflow-hidden h-full justify-center">
+            <AdLogo
+              logoUrl={assets.logo_url}
+              advertiser={ad.advertiser}
+              accentColor={assets.accent_color}
+              size="lg"
+            />
             <h3 className="text-lg font-bold leading-tight">{assets.headline}</h3>
             {assets.subheadline && (
               <p className="text-xs opacity-80">{assets.subheadline}</p>
             )}
+
+            {/* Display ad media in sidebar */}
+            {assets.type === "image" && assets.image_url && (
+              <img
+                src={assets.image_url}
+                alt={ad.campaign}
+                className="max-w-full max-h-32 object-contain rounded"
+              />
+            )}
+            {assets.type === "video" && assets.video_url && (
+              <video
+                src={assets.video_url}
+                poster={assets.poster_url}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="max-w-full max-h-32 object-contain rounded"
+              />
+            )}
+
             <Button
               size="sm"
               style={{
@@ -787,10 +852,18 @@ function LBarOverlay({
             >
               {assets.cta}
             </Button>
+
+            {/* QR Code */}
             {assets.qr_code_url && (
-              <div className="w-20 h-20 bg-white rounded-lg flex items-center justify-center">
-                <span className="text-black text-xs">QR Code</span>
-              </div>
+              <img
+                src={assets.qr_code_url}
+                alt="Scan QR Code"
+                className="w-16 h-16 bg-white rounded-lg p-1"
+                onError={(e) => {
+                  // Fallback to placeholder if QR code fails to load
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
             )}
           </div>
         </div>
@@ -801,14 +874,12 @@ function LBarOverlay({
         <div style={styles.bottomBar}>
           <div className="flex items-center justify-between w-full max-w-4xl">
             <div className="flex items-center gap-4">
-              <div
-                className="w-12 h-12 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: assets.accent_color }}
-              >
-                <span className="text-white font-bold text-xl">
-                  {ad.advertiser.charAt(0)}
-                </span>
-              </div>
+              <AdLogo
+                logoUrl={assets.logo_url}
+                advertiser={ad.advertiser}
+                accentColor={assets.accent_color}
+                size="md"
+              />
               <div>
                 <h2 className="text-xl font-bold">{assets.headline}</h2>
                 {assets.subheadline && (
@@ -817,6 +888,25 @@ function LBarOverlay({
               </div>
             </div>
             <div className="flex items-center gap-4">
+              {/* Display ad media in bottom bar */}
+              {assets.type === "image" && assets.image_url && (
+                <img
+                  src={assets.image_url}
+                  alt={ad.campaign}
+                  className="h-full max-h-16 object-contain rounded"
+                />
+              )}
+              {assets.type === "video" && assets.video_url && (
+                <video
+                  src={assets.video_url}
+                  poster={assets.poster_url}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  className="h-full max-h-16 object-contain rounded"
+                />
+              )}
               <Button
                 style={{
                   backgroundColor: assets.accent_color,
