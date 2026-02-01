@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getRandomLBarAd,
   getLBarAdById,
+  getRandomLBarAdWithCriteria,
+  getLBarAdsByOrientation,
   LBAR_CONCEPTS,
+  type LBarOrientation,
+  type AssetType,
 } from "@/lib/mcp/lbar-concepts";
 
 /**
@@ -25,6 +29,9 @@ export async function GET() {
     description: "HyperMindZ MCP Server for Skreens L-Bar Ads",
     methods: ["get_lbar_ad", "list_lbar_ads"],
     protocol: "JSON-RPC 2.0",
+    supported_orientations: ["top-right", "left-bottom", "top-left", "right-bottom"],
+    supported_asset_types: ["image", "video"],
+    total_ads: LBAR_CONCEPTS.length,
   });
 }
 
@@ -35,7 +42,11 @@ export async function GET() {
  * {
  *   "jsonrpc": "2.0",
  *   "method": "get_lbar_ad",
- *   "params": { "event_type": "TOUCHDOWN" },
+ *   "params": {
+ *     "event_type": "TOUCHDOWN",
+ *     "orientation": "top-right",
+ *     "asset_type": "video"
+ *   },
  *   "id": "1"
  * }
  */
@@ -61,12 +72,31 @@ export async function POST(request: NextRequest) {
 
     switch (method) {
       case "get_lbar_ad": {
-        const { event_type, device_id, venue_id, ad_id } = params || {};
+        const {
+          event_type,
+          device_id,
+          venue_id,
+          ad_id,
+          orientation,
+          asset_type,
+        } = params || {};
 
         let ad;
+
+        // If specific ad_id requested, try to find it
         if (ad_id) {
           ad = getLBarAdById(ad_id);
         }
+
+        // If no specific ad or not found, get random with criteria
+        if (!ad) {
+          ad = getRandomLBarAdWithCriteria({
+            orientation: orientation as LBarOrientation | undefined,
+            assetType: asset_type as AssetType | undefined,
+          });
+        }
+
+        // Fallback to any random ad
         if (!ad) {
           ad = getRandomLBarAd();
         }
@@ -79,20 +109,45 @@ export async function POST(request: NextRequest) {
             device_id,
             venue_id,
             timestamp: new Date().toISOString(),
+            filters_applied: {
+              orientation: orientation || null,
+              asset_type: asset_type || null,
+            },
           },
         };
         break;
       }
 
       case "list_lbar_ads": {
+        const { orientation, asset_type } = params || {};
+
+        let ads = LBAR_CONCEPTS;
+
+        // Apply filters if provided
+        if (orientation) {
+          ads = getLBarAdsByOrientation(orientation as LBarOrientation);
+        }
+
+        if (asset_type) {
+          ads = ads.filter((ad) => ad.assets.type === asset_type);
+        }
+
         result = {
           success: true,
-          count: LBAR_CONCEPTS.length,
-          ads: LBAR_CONCEPTS.map((ad) => ({
+          count: ads.length,
+          filters_applied: {
+            orientation: orientation || null,
+            asset_type: asset_type || null,
+          },
+          ads: ads.map((ad) => ({
             id: ad.id,
             advertiser: ad.advertiser,
             campaign: ad.campaign,
             headline: ad.assets.headline,
+            orientation: ad.orientation,
+            asset_type: ad.assets.type,
+            duration_ms: ad.duration_ms,
+            content_area: ad.content_area,
           })),
         };
         break;
