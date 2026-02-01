@@ -82,7 +82,7 @@ Returns a targeted L-Bar ad based on event type and household segments.
   "id": "2"
 }
 
-// Response
+// Response (Image Ad)
 {
   "jsonrpc": "2.0",
   "result": {
@@ -90,22 +90,108 @@ Returns a targeted L-Bar ad based on event type and household segments.
     "ad": {
       "id": "ford-f150-touchdown",
       "advertiser": "Ford",
+      "campaign": "Touchdown Deals",
       "orientation": "top-right",
+      "dimensions": {
+        "top_bar_height": 12,
+        "right_bar_width": 20
+      },
       "duration_ms": 15000,
       "assets": {
+        "type": "image",
+        "image_url": "/ads/ford-f150-lbar.png",
+        "logo_url": "/ads/ford-logo.png",
+        "qr_code_url": "/ads/qr-ford.png",
         "headline": "BUILT FORD TOUGH",
+        "subheadline": "$5,000 off F-150",
         "cta": "Build Yours",
-        "background_color": "#003478"
+        "background_color": "#003478",
+        "text_color": "#FFFFFF",
+        "accent_color": "#F5B400"
+      },
+      "tracking": {
+        "impression_url": "/api/track/impression?ad=ford-f150",
+        "click_url": "/api/track/click?ad=ford-f150"
+      },
+      "content_area": {
+        "position": "bottom-left",
+        "width_percent": 80,
+        "height_percent": 88
       }
     },
     "targeting": {
+      "method": "contextual",
       "score": 0.98,
-      "matched_segments": ["premium-auto-intenders", "sports-enthusiasts"]
+      "matched_segments": ["premium-auto-intenders", "sports-enthusiasts"],
+      "event_relevance": 1.0,
+      "segment_relevance": 0.95
+    }
+  },
+  "id": "2"
+}
+
+// Response (Video Ad)
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "success": true,
+    "ad": {
+      "id": "toyota-halftime",
+      "advertiser": "Toyota",
+      "campaign": "Halftime Deals",
+      "orientation": "left-bottom",
+      "dimensions": {
+        "left_bar_width": 22,
+        "bottom_bar_height": 15
+      },
+      "duration_ms": 20000,
+      "assets": {
+        "type": "video",
+        "video_url": "/ads/toyota-tundra.mp4",
+        "poster_url": "/ads/toyota-poster.jpg",
+        "logo_url": "/ads/toyota-logo.png",
+        "headline": "HALFTIME DEAL",
+        "subheadline": "0% APR for 60 months",
+        "cta": "Shop Now",
+        "background_color": "#1a1a1a",
+        "text_color": "#FFFFFF",
+        "accent_color": "#EB0A1E"
+      },
+      "tracking": {
+        "impression_url": "/api/track/impression?ad=toyota-halftime",
+        "click_url": "/api/track/click?ad=toyota-halftime"
+      },
+      "content_area": {
+        "position": "top-right",
+        "width_percent": 78,
+        "height_percent": 85
+      }
+    },
+    "targeting": {
+      "method": "contextual",
+      "score": 0.96,
+      "matched_segments": ["premium-auto-intenders"],
+      "event_relevance": 1.0,
+      "segment_relevance": 0.90
     }
   },
   "id": "2"
 }
 ```
+
+---
+
+## Asset URLs Reference
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `image_url` | string | Static image for image-type ads (download and display) |
+| `video_url` | string | Video file for video-type ads (stream or download) |
+| `poster_url` | string | Video thumbnail shown before playback |
+| `logo_url` | string | Advertiser brand logo |
+| `qr_code_url` | string | QR code image for mobile engagement |
+
+**Base URL:** Relative paths are served from the MCP server origin. Prepend `https://skreens-demo.vercel.app` for absolute URLs.
 
 ---
 
