@@ -3,15 +3,22 @@
 ## Endpoint
 
 ```
-POST https://skreens-demo.vercel.app/api/mcp
+POST https://ad-server.agenticregistry.ai/api/mcp
 ```
 
 ## Authentication
 
-| Environment | Auth Required |
-|-------------|---------------|
-| Development | No |
-| Production  | Yes - `Authorization: Bearer <API_KEY>` or `X-API-Key: <API_KEY>` |
+**Required for all requests.** Use one of these headers:
+
+```
+Authorization: Bearer <API_KEY>
+```
+or
+```
+X-API-Key: <API_KEY>
+```
+
+Contact HyperMindZ to obtain your API key.
 
 ---
 
@@ -191,7 +198,7 @@ Returns a targeted L-Bar ad based on event type and household segments.
 | `logo_url` | string | Advertiser brand logo |
 | `qr_code_url` | string | QR code image for mobile engagement |
 
-**Base URL:** Relative paths are served from the MCP server origin. Prepend `https://skreens-demo.vercel.app` for absolute URLs.
+**Base URL:** Relative paths are served from the MCP server origin. Prepend `https://ad-server.agenticregistry.ai` for absolute URLs.
 
 ---
 
@@ -223,13 +230,13 @@ Returns a targeted L-Bar ad based on event type and household segments.
 
 ```bash
 # 1. Resolve Identity
-curl -X POST https://skreens-demo.vercel.app/api/mcp \
+curl -X POST https://ad-server.agenticregistry.ai/api/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"jsonrpc":"2.0","method":"resolve_identity","params":{"device_id":"skreens-venue-42-screen-1"},"id":"1"}'
 
 # 2. Get Contextual Ad
-curl -X POST https://skreens-demo.vercel.app/api/mcp \
+curl -X POST https://ad-server.agenticregistry.ai/api/mcp \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"jsonrpc":"2.0","method":"get_contextual_ad","params":{"event_type":"TOUCHDOWN","household_id":"hh_001"},"id":"2"}'
@@ -242,7 +249,7 @@ curl -X POST https://skreens-demo.vercel.app/api/mcp \
 Use the built-in test client to explore the API:
 
 ```
-https://skreens-demo.vercel.app/test-client
+https://ad-server.agenticregistry.ai/test-client
 ```
 
 Features:
