@@ -29,12 +29,46 @@ This guide explains the complete process for a Skreens client to request and dis
 
 ## Integration Flow
 
+### Step 0: Authentication Setup
+
+The MCP API requires API key authentication in production. HyperMindZ will provide your API key.
+
+**Authentication Methods (choose one):**
+
+```javascript
+// Option 1: Authorization header (recommended)
+headers: {
+  'Authorization': 'Bearer sk_live_your_api_key_here',
+  'Content-Type': 'application/json'
+}
+
+// Option 2: X-API-Key header
+headers: {
+  'X-API-Key': 'sk_live_your_api_key_here',
+  'Content-Type': 'application/json'
+}
+```
+
+**Error Response (401 Unauthorized):**
+```json
+{
+  "jsonrpc": "2.0",
+  "error": {
+    "code": -32000,
+    "message": "Invalid or missing API key. Use Authorization: Bearer <key> or X-API-Key header."
+  },
+  "id": null
+}
+```
+
+---
+
 ### Step 1: Initialize Connection
 
 When the Skreens app starts, verify connectivity to the MCP server.
 
 ```javascript
-// Check MCP server health
+// Check MCP server health (no auth required for health check)
 const response = await fetch('https://<mcp-server>/api/mcp');
 const serverInfo = await response.json();
 
@@ -55,6 +89,8 @@ console.log(serverInfo);
 When a triggering event occurs (touchdown, halftime, etc.), request an ad from the MCP server.
 
 ```javascript
+const API_KEY = 'sk_live_your_api_key_here'; // Provided by HyperMindZ
+
 async function requestLBarAd(eventType, options = {}) {
   const request = {
     jsonrpc: "2.0",
@@ -71,7 +107,10 @@ async function requestLBarAd(eventType, options = {}) {
 
   const response = await fetch('https://<mcp-server>/api/mcp', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${API_KEY}`,
+    },
     body: JSON.stringify(request),
   });
 
@@ -305,8 +344,9 @@ function fireCompletionEvent(ad) {
 
 ```javascript
 class SkreensLBarClient {
-  constructor(mcpServerUrl) {
+  constructor(mcpServerUrl, apiKey) {
     this.mcpServerUrl = mcpServerUrl;
+    this.apiKey = apiKey;
     this.currentAd = null;
     this.isDisplayingAd = false;
   }
@@ -335,7 +375,10 @@ class SkreensLBarClient {
 
     const response = await fetch(this.mcpServerUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`,
+      },
       body: JSON.stringify(request),
     });
 
@@ -465,7 +508,8 @@ class SkreensLBarClient {
 }
 
 // Usage
-const client = new SkreensLBarClient('https://<mcp-server>/api/mcp');
+const API_KEY = 'sk_live_your_api_key_here'; // Provided by HyperMindZ
+const client = new SkreensLBarClient('https://<mcp-server>/api/mcp', API_KEY);
 
 // Initialize on app start
 await client.initialize();

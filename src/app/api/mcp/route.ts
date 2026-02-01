@@ -17,10 +17,60 @@ import {
  * Methods:
  * - get_lbar_ad: Get an L-Bar ad for display during events
  * - list_lbar_ads: List all available L-Bar ad concepts
+ *
+ * Authentication:
+ * - API Key via Authorization header: "Bearer sk_live_xxxx"
+ * - Or via X-API-Key header
  */
 
+// API Key validation
+const VALID_API_KEYS = new Set([
+  process.env.MCP_API_KEY_SKREENS,      // Primary Skreens key
+  process.env.MCP_API_KEY_INTERNAL,      // Internal testing key
+].filter(Boolean));
+
+// Allow unauthenticated access in development
+const REQUIRE_AUTH = process.env.NODE_ENV === "production";
+
+function validateApiKey(request: NextRequest): { valid: boolean; error?: string } {
+  if (!REQUIRE_AUTH) {
+    return { valid: true };
+  }
+
+  // Check Authorization header (Bearer token)
+  const authHeader = request.headers.get("authorization");
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    if (VALID_API_KEYS.has(token)) {
+      return { valid: true };
+    }
+  }
+
+  // Check X-API-Key header
+  const apiKeyHeader = request.headers.get("x-api-key");
+  if (apiKeyHeader && VALID_API_KEYS.has(apiKeyHeader)) {
+    return { valid: true };
+  }
+
+  return {
+    valid: false,
+    error: "Invalid or missing API key. Use Authorization: Bearer <key> or X-API-Key header.",
+  };
+}
+
+function unauthorizedResponse(message: string, id?: string | number | null) {
+  return NextResponse.json(
+    {
+      jsonrpc: "2.0",
+      error: { code: -32000, message },
+      id: id || null,
+    },
+    { status: 401 }
+  );
+}
+
 /**
- * GET /api/mcp - API info and health check
+ * GET /api/mcp - API info and health check (no auth required)
  */
 export async function GET() {
   return NextResponse.json({
@@ -52,6 +102,12 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Validate API key
+    const authResult = validateApiKey(request);
+    if (!authResult.valid) {
+      return unauthorizedResponse(authResult.error || "Unauthorized");
+    }
+
     const body = await request.json();
 
     // Handle JSON-RPC 2.0 request format
