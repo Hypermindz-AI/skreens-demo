@@ -20,7 +20,9 @@ export type AssetType = "image" | "video";
 
 export interface LBarAssets {
   type: AssetType;
-  // For images
+  // Skreens full-frame overlay (1920x1080 PNG with transparent content area)
+  skreens_overlay_url?: string;
+  // For images (component-based rendering)
   image_url?: string;
   // For videos
   video_url?: string;
@@ -79,6 +81,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 15000,
     assets: {
       type: "image",
+      skreens_overlay_url: "/ads/skreens-format/ubereats-delivery.png",
       image_url: "/ads/examples/ubereats-lbar-topright.png",
       headline: "GET ALMOST ANYTHING. DELIVERED.",
       cta: "ORDER NOW",
@@ -113,6 +116,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 10000,
     assets: {
       type: "video",
+      skreens_overlay_url: "/ads/skreens-format/lavazza-tabli.png",
       video_url: "/ads/examples/lavazza-poster.png",
       poster_url: "/ads/examples/lavazza-poster.png",
       headline: "LAVAZZA TABLÌ",
@@ -149,6 +153,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 15000,
     assets: {
       type: "image",
+      skreens_overlay_url: "/ads/skreens-format/ford-f150-touchdown.png",
       image_url: "/ads/ford-f150-lbar.png",
       headline: "TOUCHDOWN DEAL!",
       subheadline: "Celebrate with $5,000 off F-150",
@@ -184,6 +189,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 12000,
     assets: {
       type: "video",
+      skreens_overlay_url: "/ads/skreens-format/budweiser-celebration.png",
       video_url: "/ads/budweiser-poster.png",
       poster_url: "/ads/budweiser-poster.png",
       headline: "THIS BUD'S FOR YOU!",
@@ -220,6 +226,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 10000,
     assets: {
       type: "image",
+      skreens_overlay_url: "/ads/skreens-format/draftkings-live-odds.png",
       image_url: "/ads/draftkings-lbar.png",
       headline: "LIVE ODDS NOW!",
       subheadline: "Bet the next play",
@@ -255,6 +262,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 15000,
     assets: {
       type: "image",
+      skreens_overlay_url: "/ads/skreens-format/pepsi-zero-refresh.png",
       image_url: "/ads/pepsi-lbar.png",
       headline: "ZERO SUGAR. MAX TASTE.",
       subheadline: "The official drink of game day",
@@ -290,6 +298,7 @@ export const LBAR_CONCEPTS: LBarAd[] = [
     duration_ms: 20000,
     assets: {
       type: "video",
+      skreens_overlay_url: "/ads/skreens-format/toyota-halftime.png",
       video_url: "/ads/toyota-poster.png",
       poster_url: "/ads/toyota-poster.png",
       headline: "HALFTIME DEAL",
