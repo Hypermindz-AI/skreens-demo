@@ -441,8 +441,12 @@ export async function POST(request: NextRequest) {
         );
 
         if (scoredAds.length === 0) {
-          // Fallback to random ad
-          const fallbackAd = getRandomLBarAd();
+          // Fallback to random ad that matches the requested asset type
+          const fallbackAd = getRandomLBarAdWithCriteria({
+            orientation: orientation as LBarOrientation | undefined,
+            assetType: asset_type as AssetType | undefined,
+          }) || getRandomLBarAd(); // Only use unfiltered fallback if no match found
+
           result = {
             success: true,
             ad: fallbackAd,
