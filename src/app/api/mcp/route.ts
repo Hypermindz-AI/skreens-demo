@@ -83,6 +83,17 @@ export const VALID_EVENT_TYPES = [
 export type EventType = (typeof VALID_EVENT_TYPES)[number];
 
 /**
+ * Direct event-to-ad mapping for specific football events
+ * These events will always return the assigned ad
+ */
+const EVENT_AD_MAPPING: Partial<Record<EventType, string>> = {
+  TOUCHDOWN: "draftkings-sportsbook",      // DraftKings (right-bottom)
+  FIELD_GOAL: "daznbet-livebetting",       // DAZN Bet (right-bottom)
+  SAFETY: "dazn-boxing",                   // DAZN Boxing (left-bottom)
+  INTERCEPTION: "ubereats-delivery",       // UberEats (top-right)
+};
+
+/**
  * Ad-to-segment affinity mapping for contextual targeting
  * Higher scores = better match for that segment
  */
@@ -92,52 +103,39 @@ const AD_SEGMENT_AFFINITY: Record<string, Record<string, number>> = {
     "young-professionals": 0.8,
     "sports-enthusiasts": 0.6,
   },
-  "lavazza-tabli": {
-    "coffee-lovers": 1.0,
-    "luxury-shoppers": 0.7,
-    "fine-dining": 0.6,
+  "dazn-boxing": {
+    "sports-enthusiasts": 1.0,
+    "streaming-subscribers": 0.9,
+    "young-professionals": 0.7,
   },
-  "ford-f150-touchdown": {
-    "premium-auto-intenders": 1.0,
+  "draftkings-sportsbook": {
+    "sports-bettors": 1.0,
     "sports-enthusiasts": 0.9,
-    "home-improvement": 0.5,
+    "young-professionals": 0.6,
   },
-  "budweiser-celebration": {
-    "beer-drinkers": 1.0,
-    "sports-enthusiasts": 0.9,
-    "value-seekers": 0.6,
-  },
-  "draftkings-live-odds": {
+  "daznbet-livebetting": {
     "sports-bettors": 1.0,
     "sports-enthusiasts": 0.8,
-    "young-professionals": 0.5,
-  },
-  "pepsi-zero-refresh": {
-    "health-conscious": 0.8,
-    "sports-enthusiasts": 0.7,
-    "value-seekers": 0.6,
-  },
-  "toyota-halftime": {
-    "premium-auto-intenders": 0.9,
-    "electric-vehicle-intenders": 0.7,
-    "luxury-shoppers": 0.6,
+    "streaming-subscribers": 0.7,
   },
 };
 
 /**
  * Event-to-ad affinity mapping
- * Which ads perform best during specific events
+ * Which ads perform best during specific events (fallback when no direct mapping)
  */
 const EVENT_AD_AFFINITY: Record<string, string[]> = {
-  "TOUCHDOWN": ["ford-f150-touchdown", "budweiser-celebration", "draftkings-live-odds"],
-  "FIELD_GOAL": ["draftkings-live-odds", "pepsi-zero-refresh"],
-  "HALFTIME": ["toyota-halftime", "ubereats-delivery", "lavazza-tabli"],
-  "THREE_POINTER": ["draftkings-live-odds", "pepsi-zero-refresh"],
-  "GOAL": ["budweiser-celebration", "draftkings-live-odds"],
-  "HOME_RUN": ["budweiser-celebration", "ford-f150-touchdown"],
-  "TIMEOUT": ["ubereats-delivery", "pepsi-zero-refresh"],
-  "COMMERCIAL_BREAK": ["toyota-halftime", "ford-f150-touchdown", "lavazza-tabli"],
-  "GENERIC": ["ubereats-delivery", "pepsi-zero-refresh", "draftkings-live-odds"],
+  "TOUCHDOWN": ["draftkings-sportsbook", "daznbet-livebetting"],
+  "FIELD_GOAL": ["daznbet-livebetting", "draftkings-sportsbook"],
+  "SAFETY": ["dazn-boxing", "ubereats-delivery"],
+  "INTERCEPTION": ["ubereats-delivery", "dazn-boxing"],
+  "HALFTIME": ["ubereats-delivery", "dazn-boxing"],
+  "THREE_POINTER": ["draftkings-sportsbook", "daznbet-livebetting"],
+  "GOAL": ["dazn-boxing", "draftkings-sportsbook"],
+  "HOME_RUN": ["draftkings-sportsbook", "daznbet-livebetting"],
+  "TIMEOUT": ["ubereats-delivery", "dazn-boxing"],
+  "COMMERCIAL_BREAK": ["ubereats-delivery", "dazn-boxing"],
+  "GENERIC": ["ubereats-delivery", "draftkings-sportsbook", "dazn-boxing", "daznbet-livebetting"],
 };
 
 interface ScoredAd {
@@ -431,6 +429,32 @@ export async function POST(request: NextRequest) {
 
         // Get household profile
         const household = getHouseholdProfile(household_id);
+
+        // Check for direct event-to-ad mapping first
+        const directAdId = EVENT_AD_MAPPING[normalizedEventType];
+        if (directAdId) {
+          const directAd = getLBarAdById(directAdId);
+          if (directAd) {
+            result = {
+              success: true,
+              ad: directAd,
+              targeting: {
+                method: "direct_mapping",
+                score: 100,
+                matched_segments: household?.segments || [],
+                event_relevance: 100,
+                segment_relevance: 0,
+              },
+              request_context: {
+                event_type: normalizedEventType,
+                household_id,
+                household_segments: household?.segments || [],
+                timestamp: new Date().toISOString(),
+              },
+            };
+            break;
+          }
+        }
 
         // Score and rank ads based on household segments and event context
         const scoredAds = scoreAdsForContext(

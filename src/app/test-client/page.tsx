@@ -66,6 +66,7 @@ interface LBarAd {
   duration_ms: number;
   assets: {
     type: "image" | "video";
+    skreens_overlay_url?: string;
     image_url?: string;
     video_url?: string;
     poster_url?: string;
@@ -665,266 +666,44 @@ function LBarOverlay({
   countdown: number;
   onClose: () => void;
 }) {
-  const { orientation, dimensions, assets } = ad;
+  const { assets } = ad;
 
-  // Calculate positions based on orientation
-  const getOverlayStyle = () => {
-    const base: React.CSSProperties = {
-      position: "fixed",
-      zIndex: 1000,
-      backgroundColor: assets.background_color,
-      color: assets.text_color,
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "center",
-      alignItems: "center",
-      padding: "1rem",
-    };
-
-    switch (orientation) {
-      case "top-right":
-        return {
-          topBar: {
-            ...base,
-            top: 0,
-            left: 0,
-            right: 0,
-            height: `${dimensions.top_bar_height}%`,
-          },
-          sideBar: {
-            ...base,
-            top: `${dimensions.top_bar_height}%`,
-            right: 0,
-            width: `${dimensions.right_bar_width}%`,
-            bottom: 0,
-          },
-        };
-      case "left-bottom":
-        return {
-          sideBar: {
-            ...base,
-            top: 0,
-            left: 0,
-            width: `${dimensions.left_bar_width}%`,
-            bottom: `${dimensions.bottom_bar_height}%`,
-          },
-          bottomBar: {
-            ...base,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: `${dimensions.bottom_bar_height}%`,
-          },
-        };
-      case "top-left":
-        return {
-          topBar: {
-            ...base,
-            top: 0,
-            left: 0,
-            right: 0,
-            height: `${dimensions.top_bar_height}%`,
-          },
-          sideBar: {
-            ...base,
-            top: `${dimensions.top_bar_height}%`,
-            left: 0,
-            width: `${dimensions.left_bar_width}%`,
-            bottom: 0,
-          },
-        };
-      case "right-bottom":
-        return {
-          sideBar: {
-            ...base,
-            top: 0,
-            right: 0,
-            width: `${dimensions.right_bar_width}%`,
-            bottom: `${dimensions.bottom_bar_height}%`,
-          },
-          bottomBar: {
-            ...base,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: `${dimensions.bottom_bar_height}%`,
-          },
-        };
-      default:
-        return { topBar: base, sideBar: base };
-    }
-  };
-
-  const styles = getOverlayStyle();
-  const hasTopBar = orientation === "top-right" || orientation === "top-left";
-  const hasBottomBar = orientation === "left-bottom" || orientation === "right-bottom";
+  // Use Skreens full-frame overlay if available
+  const overlayUrl = assets.skreens_overlay_url || assets.image_url;
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Full-frame Skreens overlay - 1920x1080 PNG with transparent content area */}
       <div
-        className="fixed inset-0 bg-black/20 z-[999]"
-        onClick={onClose}
-      />
+        className="fixed inset-0 z-[1000] flex items-center justify-center pointer-events-none"
+        style={{
+          // Maintain 16:9 aspect ratio for the overlay
+          aspectRatio: "16/9",
+        }}
+      >
+        {overlayUrl && (
+          <img
+            src={overlayUrl}
+            alt={`${ad.advertiser} - ${ad.campaign}`}
+            className="w-full h-full object-contain"
+            style={{
+              // Ensure the image covers the viewport while maintaining aspect ratio
+              maxWidth: "100vw",
+              maxHeight: "100vh",
+            }}
+          />
+        )}
+      </div>
 
-      {/* Top Bar */}
-      {hasTopBar && styles.topBar && (
-        <div style={styles.topBar}>
-          <div className="flex items-center justify-between w-full max-w-4xl">
-            <div className="flex items-center gap-4">
-              <AdLogo
-                logoUrl={assets.logo_url}
-                advertiser={ad.advertiser}
-                accentColor={assets.accent_color}
-                size="md"
-              />
-              <div>
-                <h2 className="text-xl font-bold">{assets.headline}</h2>
-                {assets.subheadline && (
-                  <p className="text-sm opacity-80">{assets.subheadline}</p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* Display ad image in top bar if available */}
-              {assets.type === "image" && assets.image_url && (
-                <img
-                  src={assets.image_url}
-                  alt={ad.campaign}
-                  className="h-full max-h-16 object-contain rounded"
-                />
-              )}
-              <Button
-                style={{
-                  backgroundColor: assets.accent_color,
-                  color: "#fff",
-                }}
-              >
-                {assets.cta}
-              </Button>
-              <div className="text-sm opacity-60">{countdown}s</div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Side Bar */}
-      {styles.sideBar && (
-        <div style={styles.sideBar}>
-          <div className="flex flex-col items-center gap-3 text-center overflow-hidden h-full justify-center">
-            <AdLogo
-              logoUrl={assets.logo_url}
-              advertiser={ad.advertiser}
-              accentColor={assets.accent_color}
-              size="lg"
-            />
-            <h3 className="text-lg font-bold leading-tight">{assets.headline}</h3>
-            {assets.subheadline && (
-              <p className="text-xs opacity-80">{assets.subheadline}</p>
-            )}
-
-            {/* Display ad media in sidebar */}
-            {assets.type === "image" && assets.image_url && (
-              <img
-                src={assets.image_url}
-                alt={ad.campaign}
-                className="max-w-full max-h-32 object-contain rounded"
-              />
-            )}
-            {assets.type === "video" && assets.video_url && (
-              <video
-                src={assets.video_url}
-                poster={assets.poster_url}
-                autoPlay
-                muted
-                loop
-                playsInline
-                className="max-w-full max-h-32 object-contain rounded"
-              />
-            )}
-
-            <Button
-              size="sm"
-              style={{
-                backgroundColor: assets.accent_color,
-                color: "#fff",
-              }}
-            >
-              {assets.cta}
-            </Button>
-
-            {/* QR Code */}
-            {assets.qr_code_url && (
-              <img
-                src={assets.qr_code_url}
-                alt="Scan QR Code"
-                className="w-16 h-16 bg-white rounded-lg p-1"
-                onError={(e) => {
-                  // Fallback to placeholder if QR code fails to load
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Bottom Bar */}
-      {hasBottomBar && styles.bottomBar && (
-        <div style={styles.bottomBar}>
-          <div className="flex items-center justify-between w-full max-w-4xl">
-            <div className="flex items-center gap-4">
-              <AdLogo
-                logoUrl={assets.logo_url}
-                advertiser={ad.advertiser}
-                accentColor={assets.accent_color}
-                size="md"
-              />
-              <div>
-                <h2 className="text-xl font-bold">{assets.headline}</h2>
-                {assets.subheadline && (
-                  <p className="text-sm opacity-80">{assets.subheadline}</p>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              {/* Display ad media in bottom bar */}
-              {assets.type === "image" && assets.image_url && (
-                <img
-                  src={assets.image_url}
-                  alt={ad.campaign}
-                  className="h-full max-h-16 object-contain rounded"
-                />
-              )}
-              {assets.type === "video" && assets.video_url && (
-                <video
-                  src={assets.video_url}
-                  poster={assets.poster_url}
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                  className="h-full max-h-16 object-contain rounded"
-                />
-              )}
-              <Button
-                style={{
-                  backgroundColor: assets.accent_color,
-                  color: "#fff",
-                }}
-              >
-                {assets.cta}
-              </Button>
-              <div className="text-sm opacity-60">{countdown}s</div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Countdown badge */}
+      <div className="fixed bottom-4 right-4 z-[1001] bg-black/70 text-white px-3 py-1.5 rounded-full text-sm font-medium">
+        {countdown}s
+      </div>
 
       {/* Close button */}
       <button
         onClick={onClose}
-        className="fixed top-4 right-4 z-[1001] bg-black/50 hover:bg-black/70 text-white rounded-full p-2"
+        className="fixed top-4 right-4 z-[1001] bg-black/50 hover:bg-black/70 text-white rounded-full p-2 pointer-events-auto"
       >
         <XCircle className="h-6 w-6" />
       </button>
